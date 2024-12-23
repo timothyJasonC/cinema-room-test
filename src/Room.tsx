@@ -1,5 +1,8 @@
 import { useState } from "react";
 import CinemaPreview from "./CinemaPreview";
+import { PacketDecoder } from "./decodePacket";
+import axios from "axios";
+import { PacketEncoder } from "./createPacket";
 
 const CinemaRoom = () => {
   const [rows, setRows] = useState<number>(5); // Default number of rows
@@ -35,10 +38,10 @@ const CinemaRoom = () => {
   };
 
   const handleSubmit = () => {
-     // Filter available seats (displayCol > 0)
-     const availableSeats = seats
-     .filter((seat) => seat.displayCol > 0)
-     .map((seat) => `${seat.row}${seat.displayCol}`); // Format seat codes
+    // Filter available seats (displayCol > 0)
+    const availableSeats = seats
+      .filter((seat) => seat.displayCol > 0)
+      .map((seat) => `${seat.row}${seat.displayCol}`); // Format seat codes
 
     const data = {
       rows,
@@ -47,6 +50,60 @@ const CinemaRoom = () => {
       layout: seats,
       availableSeats
     };
+
+    const cinemaData = {
+      cinema_id: 2,
+      type: 'Regular 2D',
+      total_seats: 20,
+      map_seat: data,
+      price: 35000,
+      prime_price: 50000
+    }
+
+    console.log(cinemaData);
+    
+
+    const encoder = new TextEncoder();
+    const payload = encoder.encode(JSON.stringify(cinemaData));
+    const type = 2; // Misalnya tipe paket DATA
+
+    // Encode packet
+    const encodedPacket = PacketEncoder.encode(type, payload);
+
+    // Decode packet
+    const decodedPacket = PacketDecoder.decode(encodedPacket);
+    // console.log('decodedd paket lokal', decodedPacket);
+
+
+    // Convert Uint8Array payload back to JSON string
+    const payloadArray = Array.from(decodedPacket.payload);
+
+    // Fix: Use Uint8Array for decoding
+    const decoder = new TextDecoder();
+    const decoded = decoder.decode(new Uint8Array(payloadArray));
+    console.log("Decoded Payload:", decoded);
+
+    axios.post("http://127.0.0.1:8080/api/v1/room", encodedPacket, {
+      headers: {
+        "Content-Type": "application/octet-stream"
+      },
+      responseType: "arraybuffer" // Penting untuk menerima data biner
+    }).then(response => {
+      // Menerima respons binary dari backend
+      const responseBinary = new Uint8Array(response.data);
+
+      // Decode respons menggunakan PacketDecoder
+      const decodedPacket = PacketDecoder.decode(responseBinary);
+      const payloadArray = Array.from(decodedPacket.payload);
+      const decoder = new TextDecoder();
+      const decoded = decoder.decode(new Uint8Array(payloadArray));
+      // console.log("Decoded Payload:", decoded);
+
+
+      console.log("Decoded Packet from Backend:", decoded);
+    }).catch((error: any) => {
+      console.error("Error:", error);
+    });
 
     console.log("Cinema Data:", data);
     setSubmittedData(data); // Pass data to the preview component
